@@ -2367,11 +2367,13 @@ private struct AboutPage: View {
                     )
                 }
 
-                // In-app update section
-                updateSection
+                // In-app update section (hidden when the build ships no update feed)
+                if updater.isEnabled {
+                    updateSection
 
-                if let reason = updater.readOnlyInstallReason {
-                    readOnlyLocationNotice(reason)
+                    if let reason = updater.readOnlyInstallReason {
+                        readOnlyLocationNotice(reason)
+                    }
                 }
 
                 Button {
