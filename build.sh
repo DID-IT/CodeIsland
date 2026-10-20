@@ -73,6 +73,10 @@ build_mac() {
     swift build -c release --arch arm64
 
     ARM_DIR=".build/arm64-apple-macosx/release"
+    # SwiftPM 6.4+ (swiftbuild) writes products to .build/out/Products/Release instead.
+    if [ ! -f "$ARM_DIR/$APP_NAME" ] && [ -f ".build/out/Products/Release/$APP_NAME" ]; then
+        ARM_DIR=".build/out/Products/Release"
+    fi
 
     echo "Creating app bundle..."
     rm -rf "$APP_BUNDLE"
@@ -117,7 +121,7 @@ build_mac() {
     cp "Sources/CodeIsland/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
     # Copy SPM resource bundles into Contents/Resources/ (required for code signing)
-    for bundle in .build/*/release/*.bundle; do
+    for bundle in .build/*/release/*.bundle "$ARM_DIR"/*.bundle; do
         if [ -e "$bundle" ]; then
             cp -R "$bundle" "$APP_BUNDLE/Contents/Resources/"
             break
