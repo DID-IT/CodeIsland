@@ -39,7 +39,7 @@ struct PushNotificationsSection: View {
                         Text(String(format: l10n["push_chars_format"], count)).tag(count)
                     }
                 }
-                ForEach(PushChannelKind.allCases) { kind in
+                ForEach(PushChannelKind.allowedCases) { kind in
                     PushChannelEditor(config: binding(for: kind))
                 }
                 Text(l10n["push_storage_note"])

@@ -38,12 +38,6 @@
 	<key>SUAutomaticallyUpdate</key>
 	<false/>
 	<key>SUEnableAutomaticChecks</key>
-	<true/>
-	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/wxtsky/CodeIsland/main/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>oqLtx5s2hc8Xgsp4rEuTwnQ8UGRT4ma4tjlf+1i3YHA=</string>
-	<key>SUScheduledCheckInterval</key>
-	<integer>14400</integer>
+	<false/>
 </dict>
 </plist>

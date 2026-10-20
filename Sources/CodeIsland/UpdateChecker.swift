@@ -32,6 +32,14 @@ final class UpdateChecker: NSObject, ObservableObject {
     /// `checkForUpdates()` and `state` for most UI.
     var updater: SPUUpdater { controller.updater }
 
+    /// False when Info.plist carries no `SUFeedURL`. This fork ships without
+    /// one so its own builds are never offered upstream's signed DMG; add a
+    /// feed URL plus your own `SUPublicEDKey` to turn updates back on.
+    let isEnabled: Bool = {
+        let feed = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String
+        return !(feed ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+    }()
+
     /// True when the app bundle lives inside a Homebrew cask path. Homebrew
     /// manages its own upgrade flow, so Sparkle stays hands-off in that case.
     var isHomebrewInstall: Bool {
@@ -61,6 +69,11 @@ final class UpdateChecker: NSObject, ObservableObject {
         }
         #endif
 
+        guard isEnabled else {
+            Self.log.info("No SUFeedURL in Info.plist — Sparkle disabled")
+            return
+        }
+
         if isHomebrewInstall {
             Self.log.info("Homebrew install detected — disabling Sparkle auto-checks")
             updater.automaticallyChecksForUpdates = false
@@ -74,7 +87,7 @@ final class UpdateChecker: NSObject, ObservableObject {
 
     /// User-initiated check. Sparkle presents its own progress / prompt UI.
     func checkForUpdates() {
-        guard updater.canCheckForUpdates else { return }
+        guard isEnabled, updater.canCheckForUpdates else { return }
         state = .checking
         controller.checkForUpdates(nil)
     }

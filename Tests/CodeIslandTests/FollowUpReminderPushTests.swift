@@ -61,6 +61,7 @@ final class FollowUpReminderPushTests: XCTestCase {
         pending = []
         let notifier = PushNotifier.shared
         notifier.resetForTesting()
+        notifier.allowsBlockedChannelsForTesting = true
         notifier.defaults = defaults
         notifier.transport = transport
         notifier.presence = { [unowned self] in self.presence }
@@ -95,6 +96,7 @@ final class FollowUpReminderPushTests: XCTestCase {
         notifier.clock = Date.init
         notifier.defaults = .standard
         notifier.resetForTesting()
+        notifier.allowsBlockedChannelsForTesting = false
         defaults.removePersistentDomain(forName: suiteName)
         followUps = nil
         appState = nil

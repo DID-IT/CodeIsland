@@ -33,6 +33,21 @@ public enum PushChannelKind: String, CaseIterable, Codable, Sendable, Identifiab
         }
     }
 
+    /// Services run from China (Bark's hosted relay, Alibaba DingTalk,
+    /// ByteDance Feishu / Lark, Tencent WeCom). This fork never sends to
+    /// them: they are hidden in Settings and skipped by `PushNotifier`,
+    /// even when settings saved by an upstream build still enable them.
+    public var isBlockedInFork: Bool {
+        switch self {
+        case .bark, .dingtalk, .feishu, .wecom: return true
+        case .ntfy, .slack, .telegram: return false
+        }
+    }
+
+    public static var allowedCases: [PushChannelKind] {
+        allCases.filter { !$0.isBlockedInFork }
+    }
+
     /// A team chat: everyone in the group reads what is posted, so a new
     /// channel sends headlines only (`PushChannelConfig.includeDetails`).
     public var isGroupChat: Bool {
