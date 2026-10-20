@@ -258,8 +258,17 @@ final class PushNotifier: ObservableObject {
         return stored > 0 ? stored : SettingsDefaults.pushSummaryLength
     }
 
+    /// Upstream's push tests use Bark as their stand-in channel; they set
+    /// this so they keep running unchanged. Never set outside tests.
+    var allowsBlockedChannelsForTesting = false
+
+    private func isBlocked(_ kind: PushChannelKind) -> Bool {
+        kind.isBlockedInFork && !allowsBlockedChannelsForTesting
+    }
+
     var channels: [PushChannelConfig] {
         PushChannelConfig.decodeList(defaults.string(forKey: SettingsKey.pushChannels) ?? SettingsDefaults.pushChannels)
+            .filter { !isBlocked($0.kind) }
     }
 
     // MARK: Sending
@@ -469,6 +478,7 @@ final class PushNotifier: ObservableObject {
     /// a timestamp — and records the server's verdict.
     private func transmit(_ item: Outgoing) {
         let channel = item.channel
+        guard !isBlocked(channel.kind) else { return }
         let request: PushHTTPRequest
         do {
             request = try PushRequestBuilder.request(for: item.message, channel: channel, now: clock())
@@ -508,6 +518,7 @@ final class PushNotifier: ObservableObject {
     /// "Send test": bypasses every gate and the dedupe, and reports exactly
     /// what the server said.
     func sendTest(_ channel: PushChannelConfig) async -> PushDeliveryResult {
+        guard !isBlocked(channel.kind) else { return Self.configFailure(PushConfigProblem.invalidURL) }
         let message = PushMessage.test(strings: Self.strings())
         let result: PushDeliveryResult
         do {

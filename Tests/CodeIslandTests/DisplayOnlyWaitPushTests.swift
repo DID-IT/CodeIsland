@@ -44,6 +44,7 @@ final class DisplayOnlyWaitPushTests: XCTestCase {
         presence = PushPresenceSnapshot(screenLocked: true)
         let notifier = PushNotifier.shared
         notifier.resetForTesting()
+        notifier.allowsBlockedChannelsForTesting = true
         notifier.defaults = defaults
         notifier.transport = transport
         notifier.presence = { [unowned self] in self.presence }
@@ -64,6 +65,7 @@ final class DisplayOnlyWaitPushTests: XCTestCase {
         notifier.clock = Date.init
         notifier.defaults = .standard
         notifier.resetForTesting()
+        notifier.allowsBlockedChannelsForTesting = false
         defaults.removePersistentDomain(forName: suiteName)
         if let savedSmartSuppress {
             UserDefaults.standard.set(savedSmartSuppress, forKey: SettingsKey.smartSuppress)
