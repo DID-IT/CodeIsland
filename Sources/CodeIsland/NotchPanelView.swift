@@ -4098,7 +4098,16 @@ private struct SessionCard: View {
             && appState.pendingQuestion(forSession: sessionId) != nil
             && appState.surface.questionSessionId != sessionId
     }
-    private var cardStatus: SessionCardStatus { SessionCardStatus(session) }
+    /// Sessions this one started that are still busy (SessionFamilies).
+    private var activeChildSessions: Int { SessionFamilies.activeDescendants(of: sessionId, in: appState.sessions) }
+    /// A parent whose own turn ended reads as working while a session it
+    /// started still runs. Display only: its real status (and what pushes
+    /// and the completion card key off) is unchanged.
+    private var cardStatus: SessionCardStatus {
+        let own = SessionCardStatus(session)
+        guard own == .done || own == .idle, activeChildSessions > 0 else { return own }
+        return .working
+    }
     /// The completion card is a full card whatever the density.
     private var isCompactRow: Bool { density == .compact && !isCompletion }
     private var chipFontSize: CGFloat { SessionStatusChip.fontSize(content: fontSize) }
@@ -4115,6 +4124,9 @@ private struct SessionCard: View {
     private var liveRow: LiveRow? {
         switch cardStatus {
         case .working, .thinking:
+            if session.currentTool == nil, session.status == .idle, activeChildSessions > 0 {
+                return .tool("↳ " + String(format: L10n.shared["subagents_running_format"], activeChildSessions))
+            }
             return session.currentTool.map(LiveRow.tool) ?? .thinking
         case .needsYou:
             guard !showsExternalCursorQuestion,
@@ -4210,7 +4222,8 @@ private struct SessionCard: View {
     /// Character + subagent icons.
     private var mascotColumn: some View {
         VStack(spacing: 3) {
-            MascotView(source: session.mascotSource, status: session.status, size: 32)
+            // Awake while a session it started still runs (cardStatus).
+            MascotView(source: session.mascotSource, status: session.status == .idle && cardStatus == .working ? .running : session.status, size: 32)
             if showAgentDetails && !session.subagents.isEmpty {
                 let sorted = session.subagents.values.sorted { $0.startTime < $1.startTime }
                 // Grid: 4 per row, 8px icons
@@ -4499,7 +4512,7 @@ private struct SessionCard: View {
         let expands = compactExpands
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                MascotView(source: session.mascotSource, status: session.status, size: 18)
+                MascotView(source: session.mascotSource, status: session.status == .idle && cardStatus == .working ? .running : session.status, size: 18)
                     .frame(width: 22)
                 Text(session.headline(showProjectName: showProjectName).text)
                     .font(.system(size: fontSize, weight: .bold, design: .monospaced))

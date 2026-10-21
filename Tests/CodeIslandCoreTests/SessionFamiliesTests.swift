@@ -165,6 +165,21 @@ final class SessionFamiliesTests: XCTestCase {
         XCTAssertEqual(SessionFamilies.nest(["a", "c"], sessions: sessions).map(\.depth), [0, 0])
     }
 
+    func testAParentCountsItsBusyDescendants() {
+        var sessions = family(["b": "a", "c": "a", "d": "c"])
+        sessions["b"]?.status = .running
+        sessions["c"]?.status = .idle
+        sessions["d"]?.status = .waitingApproval
+        XCTAssertEqual(SessionFamilies.activeDescendants(of: "a", in: sessions), 2, "b, and grandchild d")
+        XCTAssertEqual(SessionFamilies.activeDescendants(of: "c", in: sessions), 1)
+        XCTAssertEqual(SessionFamilies.activeDescendants(of: "e", in: sessions), 0)
+
+        var cycle = family(["a": "b", "b": "a"])
+        cycle["a"]?.status = .running
+        XCTAssertEqual(SessionFamilies.activeDescendants(of: "a", in: cycle), 0, "never counts itself")
+        XCTAssertEqual(SessionFamilies.activeDescendants(of: "b", in: cycle), 1)
+    }
+
     func testACycleDoesNotHang() {
         let sessions = family(["a": "b", "b": "a"])
         XCTAssertEqual(Set(SessionFamilies.nest(["a", "b"], sessions: sessions).map(\.id)), ["a", "b"])

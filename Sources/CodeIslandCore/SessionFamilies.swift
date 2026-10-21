@@ -135,6 +135,21 @@ public enum SessionFamilies {
         }
     }
 
+    /// Sessions below `id` (children, grandchildren, …) that are not idle.
+    /// A parent whose own turn ended is still busy while these run.
+    public static func activeDescendants(of id: String, in sessions: [String: SessionSnapshot]) -> Int {
+        var count = 0
+        var seen: Set<String> = [id]
+        var frontier = [id]
+        while let current = frontier.popLast() {
+            for (childId, child) in sessions where child.parentSessionId == current && seen.insert(childId).inserted {
+                if child.status != .idle { count += 1 }
+                frontier.append(childId)
+            }
+        }
+        return count
+    }
+
     /// The list order with every child moved right under its parent
     /// (depth 1), recursively. A family takes the slot of its first member
     /// in `orderedIds`, so a child that needs you still pulls its family up.
