@@ -36,6 +36,9 @@ enum SessionCardStatus: Equatable, CaseIterable {
     case working
     /// The model is thinking (no tool yet).
     case thinking
+    /// The turn ended but work it started still runs in the background
+    /// (a run_in_background command, a Monitor). See BackgroundTasks.swift.
+    case waiting
     /// Idle after a finished turn.
     case done
     /// Idle and nothing has happened yet.
@@ -58,6 +61,8 @@ enum SessionCardStatus: Equatable, CaseIterable {
                 self = .error
             } else if session.interrupted {
                 self = .stopped
+            } else if !session.runningBackgroundTasks.isEmpty {
+                self = .waiting
             } else if session.lastAssistantMessage != nil
                         || session.lastUserPrompt != nil
                         || !session.recentMessages.isEmpty {
@@ -73,6 +78,7 @@ enum SessionCardStatus: Equatable, CaseIterable {
         case .needsYou: return "session_status_needs_you"
         case .working: return "session_status_working"
         case .thinking: return "session_status_thinking"
+        case .waiting: return "session_status_waiting"
         case .done: return "session_status_done"
         case .idle: return "session_status_idle"
         case .stopped: return "session_status_stopped"
@@ -88,6 +94,7 @@ enum SessionCardStatus: Equatable, CaseIterable {
         switch self {
         case .needsYou: return Color(red: 1.0, green: 0.6, blue: 0.2)
         case .working, .thinking: return Color(red: 0.3, green: 0.85, blue: 0.4)
+        case .waiting: return Color(red: 0.45, green: 0.72, blue: 1.0)
         case .done: return .white.opacity(0.62)
         case .idle: return .white.opacity(0.55)
         case .stopped: return Color(red: 1.0, green: 0.55, blue: 0.4)
@@ -109,7 +116,7 @@ enum SessionCardStatus: Equatable, CaseIterable {
     var tier: Int {
         switch self {
         case .needsYou: return 0
-        case .working, .thinking: return 1
+        case .working, .thinking, .waiting: return 1
         case .done, .idle, .stopped, .error: return 2
         }
     }

@@ -14,6 +14,8 @@ import CodeIslandCore
 //   completion  — session just finished
 //   multi       — 3 sessions in mixed states
 //   busy        — heavy workload with subagents
+//   orchestrator — one Claude session fanning out to subagents (tree view)
+//   family       — a Claude desktop session that started two others (nesting)
 //   claude      — Claude CLI single session
 //   codex       — Codex CLI single session
 //   gemini      — Gemini CLI single session
@@ -30,6 +32,8 @@ enum PreviewScenario: String, CaseIterable {
     case completion
     case multi
     case busy
+    case orchestrator
+    case family
     // CLI-specific scenarios
     case claude
     case codex
@@ -77,6 +81,10 @@ enum DebugHarness {
             applyMulti(to: appState)
         case .busy:
             applyBusy(to: appState)
+        case .orchestrator:
+            applyOrchestrator(to: appState)
+        case .family:
+            applyFamily(to: appState)
         case .claude: applyClaude(to: appState)
         case .codex: applyCodex(to: appState)
         case .gemini: applyGemini(to: appState)
@@ -245,6 +253,90 @@ enum DebugHarness {
             ],
             fetchedAt: Date()
         ))
+    }
+
+    private static func applyFamily(to state: AppState) {
+        var parent = SessionSnapshot(startTime: Date().addingTimeInterval(-1500))
+        parent.status = .idle
+        parent.cwd = "/Users/dev/mantsu"
+        parent.source = "claude"
+        parent.model = "claude-opus-5-5"
+        parent.sessionTitle = "Order cockpit UI fixes"
+        parent.lastUserPrompt = "Fix the order cockpit buttons and the user table"
+        parent.addRecentMessage(ChatMessage(isUser: true, text: "Fix the order cockpit buttons and the user table"))
+        parent.addRecentMessage(ChatMessage(isUser: false, text: "Started two sessions; I'll report when both are done."))
+
+        var deliver = SessionSnapshot(startTime: Date().addingTimeInterval(-900))
+        deliver.status = .running
+        deliver.cwd = "/Users/dev/mantsu/.claude/worktrees/OC-EXE-25-1"
+        deliver.source = "claude"
+        deliver.sessionTitle = "OC-EXE-25-1 cockpit actions (deliver)"
+        deliver.wasSpawnedBySession = true
+        deliver.parentSessionId = "preview-family-parent"
+        deliver.currentTool = "Edit"
+        deliver.toolDescription = "CockpitActions.tsx"
+        deliver.lastUserPrompt = "Show only the run/registration buttons that can be pressed now."
+        deliver.addRecentMessage(ChatMessage(isUser: true, text: "Show only the run/registration buttons that can be pressed now."))
+
+        var iam = SessionSnapshot(startTime: Date().addingTimeInterval(-600))
+        iam.status = .waitingApproval
+        iam.cwd = "/Users/dev/mantsu-identity"
+        iam.source = "claude"
+        iam.sessionTitle = "IAM: show user ID in user management"
+        iam.wasSpawnedBySession = true
+        iam.parentSessionId = "preview-family-parent"
+        iam.currentTool = "Bash"
+        iam.lastUserPrompt = "Add the user ID column to the management table."
+
+        var other = SessionSnapshot(startTime: Date().addingTimeInterval(-300))
+        other.status = .idle
+        other.cwd = "/Users/dev/mantsu-pro"
+        other.source = "claude"
+        other.lastUserPrompt = "Ship IAM-26-2 to test"
+        other.lastAssistantMessage = "Shell is green locally. Waiting for the backend on test to report apiContract 5."
+        other.backgroundTasks = [BackgroundTask(id: "b1", type: "shell", status: "running",
+                                                description: "Wait for apiContract 5 on test", command: "until curl …; do sleep 30; done",
+                                                startedAt: Date().addingTimeInterval(-1020))]
+
+        state.sessions["preview-family-parent"] = parent
+        state.sessions["preview-family-deliver"] = deliver
+        state.sessions["preview-family-iam"] = iam
+        state.sessions["preview-family-other"] = other
+        state.activeSessionId = "preview-family-iam"
+    }
+
+    private static func applyOrchestrator(to state: AppState) {
+        var s = SessionSnapshot()
+        s.status = .running
+        s.cwd = "/Users/dev/mantsu-pro"
+        s.model = "claude-opus-5-5"
+        s.source = "claude"
+        s.currentTool = "Agent"
+        s.lastUserPrompt = "Review the auth module and fix the failing tests"
+        s.addRecentMessage(ChatMessage(isUser: true, text: "Review the auth module and fix the failing tests"))
+        func sub(_ id: String, _ type: String, _ task: String, started: TimeInterval, tool: String?, model: String) -> SubagentState {
+            var a = SubagentState(agentId: id, agentType: type)
+            a.taskDescription = task
+            a.startTime = Date().addingTimeInterval(-started)
+            a.currentTool = tool
+            a.model = model
+            a.toolCount = Int(started / 9)
+            return a
+        }
+        s.subagents["a1"] = sub("a1", "Explore", "Find auth entry points", started: 42, tool: "Grep", model: "claude-haiku-5-5")
+        s.subagents["a2"] = sub("a2", "Plan", "Design token refresh fix", started: 70, tool: "Read", model: "claude-opus-5-5")
+        var tests = sub("a3", "general-purpose", "Fix failing auth tests", started: 95, tool: "Bash", model: "claude-sonnet-5-5")
+        tests.isBackground = true
+        s.subagents["a3"] = tests
+        var done1 = sub("a4", "Explore", "List auth config keys", started: 160, tool: nil, model: "claude-haiku-5-5")
+        done1.resultSummary = "Found 6 keys in AuthConfig.swift"
+        s.recordFinishedSubagent(done1, at: Date().addingTimeInterval(-95))
+        var done2 = sub("a5", "Explore", "Map session storage", started: 150, tool: nil, model: "claude-haiku-5-5")
+        done2.resultSummary = "Sessions live in Keychain + Redis"
+        s.recordFinishedSubagent(done2, at: Date().addingTimeInterval(-112))
+        s.termApp = "Ghostty"
+        state.sessions["preview-orchestrator"] = s
+        state.activeSessionId = "preview-orchestrator"
     }
 
     private static func applyBusy(to state: AppState) {

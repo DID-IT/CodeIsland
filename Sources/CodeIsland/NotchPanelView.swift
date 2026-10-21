@@ -2018,6 +2018,11 @@ private struct ApprovalBar: View {
                 )
             }
 
+            if let event = appState.pendingPermission(forSession: sessionId)?.event,
+               let origin = SubagentRequestOrigin.subagent(for: event, in: session) {
+                SubagentRequestOrigin(subagent: origin, fontSize: type.badge)
+            }
+
             // What is being asked
             HStack(alignment: .firstTextBaseline, spacing: 7) {
                 NotchCardTag(text: L10n.shared["card_permission_tag"], color: NotchCardPalette.permission, fontSize: type.badge)
@@ -2974,17 +2979,23 @@ private struct SessionListView: View {
                     .padding(.bottom, 2)
                 }
 
-                ForEach(group.ids, id: \.self) { sessionId in
-                    if let session = appState.sessions[sessionId] {
-                        SessionCard(
-                            appState: appState,
-                            sessionId: sessionId,
-                            session: session,
-                            isCompletion: onlySessionId != nil,
-                            density: density,
-                            compactProjectWidth: compactColumns.project,
-                            compactStatusWidth: compactColumns.status
-                        )
+                // Sessions started by another session sit under it (SessionFamilies).
+                ForEach(SessionFamilies.nest(group.ids, sessions: appState.sessions), id: \.id) { row in
+                    if let session = appState.sessions[row.id] {
+                        HStack(alignment: .top, spacing: 0) {
+                            if row.depth > 0 {
+                                SessionFamilyConnector(depth: row.depth)
+                            }
+                            SessionCard(
+                                appState: appState,
+                                sessionId: row.id,
+                                session: session,
+                                isCompletion: onlySessionId != nil,
+                                density: density,
+                                compactProjectWidth: compactColumns.project,
+                                compactStatusWidth: compactColumns.status
+                            )
+                        }
                     }
                 }
             }
@@ -4067,6 +4078,11 @@ private struct SessionCard: View {
         appState.permissionQueue.firstIndex { ($0.event.sessionId ?? "default") == sessionId }
     }
     private var isActiveApproval: Bool { approvalQueueIndex == 0 }
+    private var waitingSubagentIds: Set<String> {
+        let permissions = appState.permissionQueue.filter { ($0.event.sessionId ?? "default") == sessionId }.map(\.event)
+        let questions = appState.questionQueue.filter { ($0.event.sessionId ?? "default") == sessionId }.map(\.event)
+        return Set((permissions + questions).compactMap(\.agentId))
+    }
     /// Cursor is blocked on a question answered inside its own UI (#265) —
     /// a display-only wait with no in-panel answer flow.
     private var showsExternalCursorQuestion: Bool {
@@ -4082,7 +4098,16 @@ private struct SessionCard: View {
             && appState.pendingQuestion(forSession: sessionId) != nil
             && appState.surface.questionSessionId != sessionId
     }
-    private var cardStatus: SessionCardStatus { SessionCardStatus(session) }
+    /// Sessions this one started that are still busy (SessionFamilies).
+    private var activeChildSessions: Int { SessionFamilies.activeDescendants(of: sessionId, in: appState.sessions) }
+    /// A parent whose own turn ended reads as working while a session it
+    /// started still runs. Display only: its real status (and what pushes
+    /// and the completion card key off) is unchanged.
+    private var cardStatus: SessionCardStatus {
+        let own = SessionCardStatus(session)
+        guard own == .done || own == .idle, activeChildSessions > 0 else { return own }
+        return .working
+    }
     /// The completion card is a full card whatever the density.
     private var isCompactRow: Bool { density == .compact && !isCompletion }
     private var chipFontSize: CGFloat { SessionStatusChip.fontSize(content: fontSize) }
@@ -4096,15 +4121,33 @@ private struct SessionCard: View {
         case thinking
     }
 
+    /// Text beside the live row's chip: the tool's argument, or for a
+    /// waiting card the background task and how long it has run.
+    private var liveDetail: String? {
+        guard cardStatus == .waiting else { return session.toolDescription }
+        let tasks = session.runningBackgroundTasks
+        guard let first = tasks.first else { return nil }
+        let name = first.description ?? first.command ?? first.type
+        let age = SubagentTreeView.elapsed(from: first.startedAt, to: Date())
+        if tasks.count == 1 { return "\(name) · \(age)" }
+        return String(format: L10n.shared["background_tasks_running_format"], tasks.count) + " · \(name)"
+    }
+
     private var liveRow: LiveRow? {
         switch cardStatus {
         case .working, .thinking:
+            if session.currentTool == nil, session.status == .idle, activeChildSessions > 0 {
+                return .tool("↳ " + String(format: L10n.shared["subagents_running_format"], activeChildSessions))
+            }
             return session.currentTool.map(LiveRow.tool) ?? .thinking
         case .needsYou:
             guard !showsExternalCursorQuestion,
                   !(session.status == .waitingApproval && approvalQueueIndex != nil),
                   let tool = session.currentTool else { return nil }
             return .tool(tool)
+        case .waiting:
+            // What the ended turn left running; the task itself is liveDetail.
+            return .tool("⧗ " + L10n.shared["subagent_background"])
         case .done, .idle, .stopped, .error:
             return nil
         }
@@ -4151,6 +4194,10 @@ private struct SessionCard: View {
                     AgentTaskProgressView(tasks: session.agentTasks, fontSize: fontSize, agentIsIdle: session.status == .idle)
                 }
 
+                if showAgentDetails {
+                    SubagentTreeView(session: session, fontSize: fontSize, showModel: showModelLabel, waitingAgentIds: waitingSubagentIds)
+                }
+
                 if showsQuestionWaitingRow {
                     questionWaitingRow
                 }
@@ -4190,7 +4237,8 @@ private struct SessionCard: View {
     /// Character + subagent icons.
     private var mascotColumn: some View {
         VStack(spacing: 3) {
-            MascotView(source: session.mascotSource, status: session.status, size: 32)
+            // Awake while a session it started still runs (cardStatus).
+            MascotView(source: session.mascotSource, status: session.status == .idle && (cardStatus == .working || cardStatus == .waiting) ? .running : session.status, size: 32)
             if showAgentDetails && !session.subagents.isEmpty {
                 let sorted = session.subagents.values.sorted { $0.startTime < $1.startTime }
                 // Grid: 4 per row, 8px icons
@@ -4292,7 +4340,7 @@ private struct SessionCard: View {
         case .tool(let tool):
             HStack(alignment: .center, spacing: 6) {
                 SessionToolChip(tool: tool, color: cardStatus.color, fontSize: fontSize)
-                if let detail = session.toolDescription, !detail.isEmpty {
+                if let detail = liveDetail, !detail.isEmpty {
                     MorphText(
                         text: detail,
                         font: .system(size: fontSize, design: .monospaced),
@@ -4320,6 +4368,9 @@ private struct SessionCard: View {
         let event = appState.permissionQueue[idx].event
         let tool = event.toolName ?? session.currentTool ?? "Unknown"
         let input = event.toolInput
+        if let origin = SubagentRequestOrigin.subagent(for: event, in: session) {
+            SubagentRequestOrigin(subagent: origin, fontSize: max(9, fontSize - 1))
+        }
         approvalRequestLine(tool: tool, input: input, position: idx + 1, total: appState.permissionQueue.count)
         inlineApprovalActions(tool: tool, event: event)
 
@@ -4476,7 +4527,7 @@ private struct SessionCard: View {
         let expands = compactExpands
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                MascotView(source: session.mascotSource, status: session.status, size: 18)
+                MascotView(source: session.mascotSource, status: session.status == .idle && (cardStatus == .working || cardStatus == .waiting) ? .running : session.status, size: 18)
                     .frame(width: 22)
                 Text(session.headline(showProjectName: showProjectName).text)
                     .font(.system(size: fontSize, weight: .bold, design: .monospaced))
@@ -4524,7 +4575,7 @@ private struct SessionCard: View {
         } else if case .tool(let tool)? = liveRow {
             HStack(spacing: 6) {
                 SessionToolChip(tool: tool, color: cardStatus.color, fontSize: fontSize)
-                if let detail = session.toolDescription, !detail.isEmpty {
+                if let detail = liveDetail, !detail.isEmpty {
                     Text(detail)
                         .font(.system(size: max(10, fontSize - 1), design: .monospaced))
                         .foregroundStyle(.white.opacity(0.72))

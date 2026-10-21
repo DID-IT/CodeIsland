@@ -789,6 +789,19 @@ public struct SubagentState: Sendable {
     /// since a Task routinely runs on a different model than its caller.
     public var model: String?
     public var reasoningEffort: String?
+    /// What the orchestrator asked for: the Agent tool's `description`
+    /// ("Find Sparkle usage"). Claude Code's SubagentStart does not carry it;
+    /// see SubagentTaskTracking.swift for where it comes from.
+    public var taskDescription: String?
+    /// Launched with `run_in_background`.
+    public var isBackground = false
+    /// Tool calls this subagent started.
+    public var toolCount = 0
+    /// Set on SubagentStop. The entry then moves to
+    /// `SessionSnapshot.finishedSubagents`.
+    public var finishedAt: Date?
+    /// The subagent's final reply (SubagentStop's `last_assistant_message`).
+    public var resultSummary: String?
 
     public init(agentId: String, agentType: String) {
         self.agentId = agentId
