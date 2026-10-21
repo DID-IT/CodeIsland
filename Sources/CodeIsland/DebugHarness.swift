@@ -289,10 +289,14 @@ enum DebugHarness {
         iam.lastUserPrompt = "Add the user ID column to the management table."
 
         var other = SessionSnapshot(startTime: Date().addingTimeInterval(-300))
-        other.status = .processing
-        other.cwd = "/Users/dev/dynamicIsland"
+        other.status = .idle
+        other.cwd = "/Users/dev/mantsu-pro"
         other.source = "claude"
-        other.lastUserPrompt = "Unrelated session"
+        other.lastUserPrompt = "Ship IAM-26-2 to test"
+        other.lastAssistantMessage = "Shell is green locally. Waiting for the backend on test to report apiContract 5."
+        other.backgroundTasks = [BackgroundTask(id: "b1", type: "shell", status: "running",
+                                                description: "Wait for apiContract 5 on test", command: "until curl …; do sleep 30; done",
+                                                startedAt: Date().addingTimeInterval(-1020))]
 
         state.sessions["preview-family-parent"] = parent
         state.sessions["preview-family-deliver"] = deliver

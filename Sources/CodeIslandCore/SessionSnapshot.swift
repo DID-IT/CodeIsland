@@ -116,6 +116,8 @@ public struct SessionSnapshot: Sendable {
     /// First prompt was another session's brief ("Background (from the
     /// session that started this one): …").
     public var wasSpawnedBySession = false
+    /// Work this session left running past its turn (BackgroundTasks.swift).
+    public var backgroundTasks: [BackgroundTask] = []
     /// Agent ids closed by SubagentStop/Stop/SessionEnd, in insertion order
     /// (newest last). Blocks merge/fold from putting a finished subagent back
     /// on the parent. Live growth is capped at ``maxClosedSubagentIds``;
@@ -1142,6 +1144,7 @@ public func reduceEvent(
     }
 
     applySubagentTaskMetadata(sessions: &sessions, sessionId: sessionId, event: event)
+    applyBackgroundTasks(sessions: &sessions, sessionId: sessionId, eventName: eventName, event: event)
     if eventName == "PostToolUse" {
         recordSessionSpawn(sessions: &sessions, sessionId: sessionId, event: event)
     }

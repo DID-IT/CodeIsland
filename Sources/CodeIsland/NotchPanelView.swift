@@ -4121,6 +4121,18 @@ private struct SessionCard: View {
         case thinking
     }
 
+    /// Text beside the live row's chip: the tool's argument, or for a
+    /// waiting card the background task and how long it has run.
+    private var liveDetail: String? {
+        guard cardStatus == .waiting else { return session.toolDescription }
+        let tasks = session.runningBackgroundTasks
+        guard let first = tasks.first else { return nil }
+        let name = first.description ?? first.command ?? first.type
+        let age = SubagentTreeView.elapsed(from: first.startedAt, to: Date())
+        if tasks.count == 1 { return "\(name) · \(age)" }
+        return String(format: L10n.shared["background_tasks_running_format"], tasks.count) + " · \(name)"
+    }
+
     private var liveRow: LiveRow? {
         switch cardStatus {
         case .working, .thinking:
@@ -4133,6 +4145,9 @@ private struct SessionCard: View {
                   !(session.status == .waitingApproval && approvalQueueIndex != nil),
                   let tool = session.currentTool else { return nil }
             return .tool(tool)
+        case .waiting:
+            // What the ended turn left running; the task itself is liveDetail.
+            return .tool("⧗ " + L10n.shared["subagent_background"])
         case .done, .idle, .stopped, .error:
             return nil
         }
@@ -4223,7 +4238,7 @@ private struct SessionCard: View {
     private var mascotColumn: some View {
         VStack(spacing: 3) {
             // Awake while a session it started still runs (cardStatus).
-            MascotView(source: session.mascotSource, status: session.status == .idle && cardStatus == .working ? .running : session.status, size: 32)
+            MascotView(source: session.mascotSource, status: session.status == .idle && (cardStatus == .working || cardStatus == .waiting) ? .running : session.status, size: 32)
             if showAgentDetails && !session.subagents.isEmpty {
                 let sorted = session.subagents.values.sorted { $0.startTime < $1.startTime }
                 // Grid: 4 per row, 8px icons
@@ -4325,7 +4340,7 @@ private struct SessionCard: View {
         case .tool(let tool):
             HStack(alignment: .center, spacing: 6) {
                 SessionToolChip(tool: tool, color: cardStatus.color, fontSize: fontSize)
-                if let detail = session.toolDescription, !detail.isEmpty {
+                if let detail = liveDetail, !detail.isEmpty {
                     MorphText(
                         text: detail,
                         font: .system(size: fontSize, design: .monospaced),
@@ -4512,7 +4527,7 @@ private struct SessionCard: View {
         let expands = compactExpands
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                MascotView(source: session.mascotSource, status: session.status == .idle && cardStatus == .working ? .running : session.status, size: 18)
+                MascotView(source: session.mascotSource, status: session.status == .idle && (cardStatus == .working || cardStatus == .waiting) ? .running : session.status, size: 18)
                     .frame(width: 22)
                 Text(session.headline(showProjectName: showProjectName).text)
                     .font(.system(size: fontSize, weight: .bold, design: .monospaced))
@@ -4560,7 +4575,7 @@ private struct SessionCard: View {
         } else if case .tool(let tool)? = liveRow {
             HStack(spacing: 6) {
                 SessionToolChip(tool: tool, color: cardStatus.color, fontSize: fontSize)
-                if let detail = session.toolDescription, !detail.isEmpty {
+                if let detail = liveDetail, !detail.isEmpty {
                     Text(detail)
                         .font(.system(size: max(10, fontSize - 1), design: .monospaced))
                         .foregroundStyle(.white.opacity(0.72))

@@ -135,7 +135,8 @@ public enum SessionFamilies {
         }
     }
 
-    /// Sessions below `id` (children, grandchildren, …) that are not idle.
+    /// Sessions below `id` (children, grandchildren, …) that are not idle,
+    /// or idle with background work still running.
     /// A parent whose own turn ended is still busy while these run.
     public static func activeDescendants(of id: String, in sessions: [String: SessionSnapshot]) -> Int {
         var count = 0
@@ -143,7 +144,7 @@ public enum SessionFamilies {
         var frontier = [id]
         while let current = frontier.popLast() {
             for (childId, child) in sessions where child.parentSessionId == current && seen.insert(childId).inserted {
-                if child.status != .idle { count += 1 }
+                if child.status != .idle || !child.runningBackgroundTasks.isEmpty { count += 1 }
                 frontier.append(childId)
             }
         }

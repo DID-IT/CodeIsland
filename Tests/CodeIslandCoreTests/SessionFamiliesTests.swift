@@ -173,6 +173,8 @@ final class SessionFamiliesTests: XCTestCase {
         XCTAssertEqual(SessionFamilies.activeDescendants(of: "a", in: sessions), 2, "b, and grandchild d")
         XCTAssertEqual(SessionFamilies.activeDescendants(of: "c", in: sessions), 1)
         XCTAssertEqual(SessionFamilies.activeDescendants(of: "e", in: sessions), 0)
+        sessions["c"]?.backgroundTasks = [BackgroundTask(id: "b", type: "shell", status: "running", description: "Wait", command: nil, startedAt: Date())]
+        XCTAssertEqual(SessionFamilies.activeDescendants(of: "a", in: sessions), 3, "an idle child still waiting on a background task counts")
 
         var cycle = family(["a": "b", "b": "a"])
         cycle["a"]?.status = .running
