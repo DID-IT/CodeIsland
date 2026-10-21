@@ -102,6 +102,9 @@ public struct SessionSnapshot: Sendable {
     public var toolHistory: [ToolHistoryEntry] = []
     public var totalToolCallCount: Int = 0
     public var subagents: [String: SubagentState] = [:]
+    /// Subagents that stopped during the current orchestrator turn, oldest
+    /// first. Cleared by the next real user prompt. See SubagentTaskTracking.
+    public var finishedSubagents: [SubagentState] = []
     /// Agent ids closed by SubagentStop/Stop/SessionEnd, in insertion order
     /// (newest last). Blocks merge/fold from putting a finished subagent back
     /// on the parent. Live growth is capped at ``maxClosedSubagentIds``;
@@ -1127,6 +1130,8 @@ public func reduceEvent(
         return effects
     }
 
+    applySubagentTaskMetadata(sessions: &sessions, sessionId: sessionId, event: event)
+
     // Route subagent-specific events
     if let agentId = event.agentId {
         // Subagents and teammates share the parent's task list: their
@@ -1205,6 +1210,12 @@ public func reduceEvent(
             keys: ["prompt", "user_prompt", "userPrompt", "user_message", "message", "input", "content", "text"],
             includeNested: true
         )
+        // A finished subagent reporting back is not a new user turn: keep the
+        // user's own prompt and this turn's finished subagents on the card.
+        if let prompt, isTaskNotificationPrompt(prompt) {
+            break
+        }
+        sessions[sessionId]?.finishedSubagents.removeAll()
         if let prompt {
             if sessions[sessionId]?.source == "hermes" {
                 sessions[sessionId]?.hermesHooksReportPrompts = true
@@ -2126,6 +2137,8 @@ private func handleSubagentEvent(
             agentId: agentId,
             agentType: agentType
         )
+        let pendingTask = pendingAgentTaskDescription(parent: sessions[sessionId], agentType: agentType)
+        sessions[sessionId]?.subagents[agentId]?.taskDescription = pendingTask
         // Subagent spawned — parent session is actively processing
         if sessions[sessionId]?.status == .idle || sessions[sessionId]?.status == .processing {
             sessions[sessionId]?.status = .running
@@ -2172,6 +2185,13 @@ private func handleSubagentEvent(
         return true
 
     case "SubagentStop", "Stop", "SessionEnd":
+        // Codex reuses a child's id across turns (below), so only one-shot
+        // subagents are kept around as finished.
+        if var stopped = sessions[sessionId]?.subagents[agentId],
+           !isCodexSubagentEvent(event, session: sessions[sessionId]) {
+            stopped.resultSummary = firstStringFromEvent(event, keys: ["last_assistant_message"], includeNested: false)
+            sessions[sessionId]?.recordFinishedSubagent(stopped)
+        }
         sessions[sessionId]?.subagents.removeValue(forKey: agentId)
         // Codex fires SubagentStop at the end of every child *turn*, and its
         // agent_id is the child's thread id, reused for follow-up turns sent
@@ -2202,6 +2222,7 @@ private func handleSubagentEvent(
         sessions[sessionId]?.subagents[agentId]?.status = .running
         sessions[sessionId]?.subagents[agentId]?.currentTool = event.activityLabel
         sessions[sessionId]?.subagents[agentId]?.toolDescription = event.toolDescription
+        sessions[sessionId]?.subagents[agentId]?.toolCount += 1
         sessions[sessionId]?.subagents[agentId]?.lastActivity = Date()
         // Keep parent session showing as active while subagents work
         if sessions[sessionId]?.status != .waitingApproval && sessions[sessionId]?.status != .waitingQuestion {

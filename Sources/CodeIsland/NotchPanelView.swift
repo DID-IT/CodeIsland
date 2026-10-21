@@ -2018,6 +2018,11 @@ private struct ApprovalBar: View {
                 )
             }
 
+            if let event = appState.pendingPermission(forSession: sessionId)?.event,
+               let origin = SubagentRequestOrigin.subagent(for: event, in: session) {
+                SubagentRequestOrigin(subagent: origin, fontSize: type.badge)
+            }
+
             // What is being asked
             HStack(alignment: .firstTextBaseline, spacing: 7) {
                 NotchCardTag(text: L10n.shared["card_permission_tag"], color: NotchCardPalette.permission, fontSize: type.badge)
@@ -4067,6 +4072,11 @@ private struct SessionCard: View {
         appState.permissionQueue.firstIndex { ($0.event.sessionId ?? "default") == sessionId }
     }
     private var isActiveApproval: Bool { approvalQueueIndex == 0 }
+    private var waitingSubagentIds: Set<String> {
+        let permissions = appState.permissionQueue.filter { ($0.event.sessionId ?? "default") == sessionId }.map(\.event)
+        let questions = appState.questionQueue.filter { ($0.event.sessionId ?? "default") == sessionId }.map(\.event)
+        return Set((permissions + questions).compactMap(\.agentId))
+    }
     /// Cursor is blocked on a question answered inside its own UI (#265) —
     /// a display-only wait with no in-panel answer flow.
     private var showsExternalCursorQuestion: Bool {
@@ -4149,6 +4159,10 @@ private struct SessionCard: View {
                 // Agent checklist progress (TaskCreate / TodoWrite / update_plan).
                 if showTaskProgress && !session.agentTasks.isEmpty {
                     AgentTaskProgressView(tasks: session.agentTasks, fontSize: fontSize, agentIsIdle: session.status == .idle)
+                }
+
+                if showAgentDetails {
+                    SubagentTreeView(session: session, fontSize: fontSize, showModel: showModelLabel, waitingAgentIds: waitingSubagentIds)
                 }
 
                 if showsQuestionWaitingRow {
@@ -4320,6 +4334,9 @@ private struct SessionCard: View {
         let event = appState.permissionQueue[idx].event
         let tool = event.toolName ?? session.currentTool ?? "Unknown"
         let input = event.toolInput
+        if let origin = SubagentRequestOrigin.subagent(for: event, in: session) {
+            SubagentRequestOrigin(subagent: origin, fontSize: max(9, fontSize - 1))
+        }
         approvalRequestLine(tool: tool, input: input, position: idx + 1, total: appState.permissionQueue.count)
         inlineApprovalActions(tool: tool, event: event)
 

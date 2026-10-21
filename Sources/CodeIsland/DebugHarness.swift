@@ -14,6 +14,7 @@ import CodeIslandCore
 //   completion  — session just finished
 //   multi       — 3 sessions in mixed states
 //   busy        — heavy workload with subagents
+//   orchestrator — one Claude session fanning out to subagents (tree view)
 //   claude      — Claude CLI single session
 //   codex       — Codex CLI single session
 //   gemini      — Gemini CLI single session
@@ -30,6 +31,7 @@ enum PreviewScenario: String, CaseIterable {
     case completion
     case multi
     case busy
+    case orchestrator
     // CLI-specific scenarios
     case claude
     case codex
@@ -77,6 +79,8 @@ enum DebugHarness {
             applyMulti(to: appState)
         case .busy:
             applyBusy(to: appState)
+        case .orchestrator:
+            applyOrchestrator(to: appState)
         case .claude: applyClaude(to: appState)
         case .codex: applyCodex(to: appState)
         case .gemini: applyGemini(to: appState)
@@ -245,6 +249,40 @@ enum DebugHarness {
             ],
             fetchedAt: Date()
         ))
+    }
+
+    private static func applyOrchestrator(to state: AppState) {
+        var s = SessionSnapshot()
+        s.status = .running
+        s.cwd = "/Users/dev/mantsu-pro"
+        s.model = "claude-opus-5-5"
+        s.source = "claude"
+        s.currentTool = "Agent"
+        s.lastUserPrompt = "Review the auth module and fix the failing tests"
+        s.addRecentMessage(ChatMessage(isUser: true, text: "Review the auth module and fix the failing tests"))
+        func sub(_ id: String, _ type: String, _ task: String, started: TimeInterval, tool: String?, model: String) -> SubagentState {
+            var a = SubagentState(agentId: id, agentType: type)
+            a.taskDescription = task
+            a.startTime = Date().addingTimeInterval(-started)
+            a.currentTool = tool
+            a.model = model
+            a.toolCount = Int(started / 9)
+            return a
+        }
+        s.subagents["a1"] = sub("a1", "Explore", "Find auth entry points", started: 42, tool: "Grep", model: "claude-haiku-5-5")
+        s.subagents["a2"] = sub("a2", "Plan", "Design token refresh fix", started: 70, tool: "Read", model: "claude-opus-5-5")
+        var tests = sub("a3", "general-purpose", "Fix failing auth tests", started: 95, tool: "Bash", model: "claude-sonnet-5-5")
+        tests.isBackground = true
+        s.subagents["a3"] = tests
+        var done1 = sub("a4", "Explore", "List auth config keys", started: 160, tool: nil, model: "claude-haiku-5-5")
+        done1.resultSummary = "Found 6 keys in AuthConfig.swift"
+        s.recordFinishedSubagent(done1, at: Date().addingTimeInterval(-95))
+        var done2 = sub("a5", "Explore", "Map session storage", started: 150, tool: nil, model: "claude-haiku-5-5")
+        done2.resultSummary = "Sessions live in Keychain + Redis"
+        s.recordFinishedSubagent(done2, at: Date().addingTimeInterval(-112))
+        s.termApp = "Ghostty"
+        state.sessions["preview-orchestrator"] = s
+        state.activeSessionId = "preview-orchestrator"
     }
 
     private static func applyBusy(to state: AppState) {
