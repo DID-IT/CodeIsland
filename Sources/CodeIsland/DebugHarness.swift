@@ -15,6 +15,7 @@ import CodeIslandCore
 //   multi       — 3 sessions in mixed states
 //   busy        — heavy workload with subagents
 //   orchestrator — one Claude session fanning out to subagents (tree view)
+//   family       — a Claude desktop session that started two others (nesting)
 //   claude      — Claude CLI single session
 //   codex       — Codex CLI single session
 //   gemini      — Gemini CLI single session
@@ -32,6 +33,7 @@ enum PreviewScenario: String, CaseIterable {
     case multi
     case busy
     case orchestrator
+    case family
     // CLI-specific scenarios
     case claude
     case codex
@@ -81,6 +83,8 @@ enum DebugHarness {
             applyBusy(to: appState)
         case .orchestrator:
             applyOrchestrator(to: appState)
+        case .family:
+            applyFamily(to: appState)
         case .claude: applyClaude(to: appState)
         case .codex: applyCodex(to: appState)
         case .gemini: applyGemini(to: appState)
@@ -249,6 +253,52 @@ enum DebugHarness {
             ],
             fetchedAt: Date()
         ))
+    }
+
+    private static func applyFamily(to state: AppState) {
+        var parent = SessionSnapshot(startTime: Date().addingTimeInterval(-1500))
+        parent.status = .idle
+        parent.cwd = "/Users/dev/mantsu"
+        parent.source = "claude"
+        parent.model = "claude-opus-5-5"
+        parent.sessionTitle = "Order cockpit UI fixes"
+        parent.lastUserPrompt = "Fix the order cockpit buttons and the user table"
+        parent.addRecentMessage(ChatMessage(isUser: true, text: "Fix the order cockpit buttons and the user table"))
+        parent.addRecentMessage(ChatMessage(isUser: false, text: "Started two sessions; I'll report when both are done."))
+
+        var deliver = SessionSnapshot(startTime: Date().addingTimeInterval(-900))
+        deliver.status = .running
+        deliver.cwd = "/Users/dev/mantsu/.claude/worktrees/OC-EXE-25-1"
+        deliver.source = "claude"
+        deliver.sessionTitle = "OC-EXE-25-1 cockpit actions (deliver)"
+        deliver.wasSpawnedBySession = true
+        deliver.parentSessionId = "preview-family-parent"
+        deliver.currentTool = "Edit"
+        deliver.toolDescription = "CockpitActions.tsx"
+        deliver.lastUserPrompt = "Show only the run/registration buttons that can be pressed now."
+        deliver.addRecentMessage(ChatMessage(isUser: true, text: "Show only the run/registration buttons that can be pressed now."))
+
+        var iam = SessionSnapshot(startTime: Date().addingTimeInterval(-600))
+        iam.status = .waitingApproval
+        iam.cwd = "/Users/dev/mantsu-identity"
+        iam.source = "claude"
+        iam.sessionTitle = "IAM: show user ID in user management"
+        iam.wasSpawnedBySession = true
+        iam.parentSessionId = "preview-family-parent"
+        iam.currentTool = "Bash"
+        iam.lastUserPrompt = "Add the user ID column to the management table."
+
+        var other = SessionSnapshot(startTime: Date().addingTimeInterval(-300))
+        other.status = .processing
+        other.cwd = "/Users/dev/dynamicIsland"
+        other.source = "claude"
+        other.lastUserPrompt = "Unrelated session"
+
+        state.sessions["preview-family-parent"] = parent
+        state.sessions["preview-family-deliver"] = deliver
+        state.sessions["preview-family-iam"] = iam
+        state.sessions["preview-family-other"] = other
+        state.activeSessionId = "preview-family-iam"
     }
 
     private static func applyOrchestrator(to state: AppState) {

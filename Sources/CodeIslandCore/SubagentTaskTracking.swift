@@ -43,12 +43,6 @@ extension SessionSnapshot {
     }
 }
 
-/// Claude Code injects a finished subagent's result as a user prompt wrapped
-/// in `<task-notification>`. It is not something the user typed.
-public func isTaskNotificationPrompt(_ prompt: String) -> Bool {
-    prompt.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<task-notification>")
-}
-
 /// Joins task descriptions onto subagents from any event that carries them.
 /// Never creates a subagent: SubagentStart stays the only way in.
 func applySubagentTaskMetadata(

@@ -1854,6 +1854,8 @@ final class AppState {
            SessionTitleStore.supports(provider: provider) {
             refreshProviderTitle(for: sessionId)
         }
+        // Claude desktop sessions started by another session nest under it.
+        SessionFamilies.link(&sessions)
 
         // If a hook just supplied (or changed) this session's transcript path, attach
         // the tailer so the next assistant append shows up in the panel immediately.
@@ -3487,6 +3489,9 @@ final class AppState {
             snapshot.herdrSocketPath = p.herdrSocketPath
             snapshot.herdrBinaryPath = p.herdrBinaryPath
             snapshot.claudeDesktopSessionId = p.claudeDesktopSessionId
+            snapshot.parentSessionId = p.parentSessionId
+            snapshot.spawnedSessionTitles = p.spawnedSessionTitles ?? [:]
+            snapshot.spawnedDesktopSessionIds = p.spawnedDesktopSessionIds ?? [:]
             snapshot.hermesChatElsewhere = p.hermesChatElsewhere ?? false
             snapshot.lastActivity = p.lastActivity
             snapshot.transcriptPath = p.transcriptPath

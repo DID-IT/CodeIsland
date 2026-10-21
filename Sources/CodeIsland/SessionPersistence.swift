@@ -56,6 +56,10 @@ struct PersistedSession: Codable {
     /// restored card is bound to the gateway daemon again and must still be
     /// swept like a hook-only one. nil = false, as in older files.
     var hermesChatElsewhere: Bool? = nil
+    /// Session families (SessionFamilies): who started whom. nil in older files.
+    var parentSessionId: String? = nil
+    var spawnedSessionTitles: [String: Date]? = nil
+    var spawnedDesktopSessionIds: [String: Date]? = nil
 }
 
 enum SessionPersistence {
@@ -134,7 +138,10 @@ enum SessionPersistence {
                 recap: s.recap,
                 reasoningEffort: s.reasoningEffort,
                 claudeDesktopSessionId: s.claudeDesktopSessionId,
-                hermesChatElsewhere: s.hermesChatElsewhere ? true : nil
+                hermesChatElsewhere: s.hermesChatElsewhere ? true : nil,
+                parentSessionId: s.parentSessionId,
+                spawnedSessionTitles: s.spawnedSessionTitles.isEmpty ? nil : s.spawnedSessionTitles,
+                spawnedDesktopSessionIds: s.spawnedDesktopSessionIds.isEmpty ? nil : s.spawnedDesktopSessionIds
             )
         }
         do {

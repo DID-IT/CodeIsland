@@ -219,3 +219,19 @@ struct SubagentRequestOrigin: View {
         .foregroundStyle(SubagentTreeView.agentColor)
     }
 }
+
+/// The "↳" gutter in front of a session another session started.
+struct SessionFamilyConnector: View {
+    let depth: Int
+
+    static let indent: CGFloat = 16
+
+    var body: some View {
+        Image(systemName: "arrow.turn.down.right")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(SubagentTreeView.agentColor.opacity(0.7))
+            .frame(width: Self.indent, alignment: .trailing)
+            .padding(.top, 14)
+            .padding(.leading, CGFloat(max(0, depth - 1)) * Self.indent + 4)
+    }
+}

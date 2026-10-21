@@ -2979,17 +2979,23 @@ private struct SessionListView: View {
                     .padding(.bottom, 2)
                 }
 
-                ForEach(group.ids, id: \.self) { sessionId in
-                    if let session = appState.sessions[sessionId] {
-                        SessionCard(
-                            appState: appState,
-                            sessionId: sessionId,
-                            session: session,
-                            isCompletion: onlySessionId != nil,
-                            density: density,
-                            compactProjectWidth: compactColumns.project,
-                            compactStatusWidth: compactColumns.status
-                        )
+                // Sessions started by another session sit under it (SessionFamilies).
+                ForEach(SessionFamilies.nest(group.ids, sessions: appState.sessions), id: \.id) { row in
+                    if let session = appState.sessions[row.id] {
+                        HStack(alignment: .top, spacing: 0) {
+                            if row.depth > 0 {
+                                SessionFamilyConnector(depth: row.depth)
+                            }
+                            SessionCard(
+                                appState: appState,
+                                sessionId: row.id,
+                                session: session,
+                                isCompletion: onlySessionId != nil,
+                                density: density,
+                                compactProjectWidth: compactColumns.project,
+                                compactStatusWidth: compactColumns.status
+                            )
+                        }
                     }
                 }
             }
